@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MY STAY MAP — 宿泊記録</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Noto+Serif+JP:wght@300;400;500&family=Montserrat:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --ink:       #1a1710;
+      --parchment: #f5f0e8;
+      --cream:     #faf7f2;
+      --gold:      #b8965a;
+      --gold-light:#d4af7a;
+      --rust:      #8b4513;
+      --slate:     #4a4540;
+      --muted:     #8a8278;
+      --border:    #ddd5c5;
+      --shadow:    rgba(26,23,16,0.12);
+
+      /* category colors */
+      --c-luxury:   #b8965a;
+      --c-ryokan:   #6b8f71;
+      --c-resort:   #5a7fa8;
+      --c-boutique: #9b6b9b;
+      --c-landmark: #c0715a;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Serif JP', 'Cormorant Garamond', serif;
+      background: var(--cream);
+      color: var(--ink);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--ink);
+      color: var(--parchment);
+      padding: 0 28px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--gold);
+      z-index: 1000;
+    }
+
+    .header-title {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+    }
+
+    .header-title h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 300;
+      letter-spacing: 0.25em;
+      color: var(--gold-light);
+    }
+
+    .header-title span {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .header-stats {
+      display: flex;
+      gap: 28px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-num {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--gold-light);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 0.55rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    /* ── Layout ── */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 320px;
+      flex-shrink: 0;
+      background: var(--parchment);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-top {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .search-box {
+      width: 100%;
+      background: var(--cream);
+      border: 1px solid var(--border);
+      padding: 7px 12px;
+      font-family: 'Noto Serif JP', serif;
+      font-size: 0.8rem;
+      color: var(--ink);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-box::placeholder { color: var(--muted); }
+    .search-box:focus { border-color: var(--gold); }
+
+    .filter-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 9px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--slate);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .filter-btn.active { background: var(--ink); color: var(--gold-light); border-color: var(--ink); }
+
+    .hotel-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 0;
+    }
+    .hotel-list::-webkit-scrollbar { width: 4px; }
+    .hotel-list::-webkit-scrollbar-track { background: transparent; }
+    .hotel-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .hotel-item {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+      position: relative;
+    }
+    .hotel-item:hover { background: #efe9de; }
+    .hotel-item.active { background: #e8dfd0; }
+    .hotel-item.hidden { display: none; }
+
+    .hotel-item::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: transparent;
+      transition: background 0.2s;
+    }
+    .hotel-item.active::before { background: var(--gold); }
+
+    .item-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .item-name {
+      font-size: 0.85rem;
+      font-weight: 500;
+      line-height: 1.3;
+      flex: 1;
+    }
+
+    .cat-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+
+    .item-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .item-date {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 0.62rem;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .item-location {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .stars {
+      color: var(--gold);
+      font-size: 0.65rem;
+      letter-spacing: -1px;
+    }
+
+    /* ── Map ── */
+    #map {
+      flex: 1;
+      z-index: 1;
+    }
+
+    /* ── Custom Marker ── */
+    .custom-marker {
+      width: 32px;
+      height: 32px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px var(--shadow);
+      border: 2px solid white;
+      transition: transform 0.2s;
+    }
+    .custom-marker .inner {
+      transform: rotate(45deg);
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    /* ── Popup ── */
+    .leaflet-popup-content-wrapper {
+      background: var(--ink);
+      color: var(--parchment);
+      border-radius: 0;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+      border: 1px solid var(--gold);
+      padding: 0;
+    }
+    .leaflet-popup-tip { background: var(--ink); }
+    .leaflet-popup-close-button {
+      color: var(--muted) !important;
+      font-size: 18px !important;
+      top: 6px !important;
+      right: 8px !important;
+    }
+    .leaflet-popup-content { margin: 0; }
+
+    .popup-inner {
+      padding: 18px 20px 16px;
+      min-width: 230px;
+      max-width: 280px;
+    }
+
+    .popup-cat {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 0.58rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+
+    .popup-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.15rem;
+      font-weight: 400;
+      line-height: 1.3;
+      color: var(--parchment);
+      margin-bottom: 4px;
+    }
+
+    .popup-location {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .popup-divider {
+      height: 1px;
+      background: linear-gradient(to right, var(--gold), transparent);
+      margin: 10px 0;
+    }
+
+    .popup-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .popup-row strong { color: var(--parchment); font-weight: 400; }
+
+    .popup-memo {
+      font-size: 0.75rem;
+      color: #c0b8a8;
+      font-style: italic;
+      line-height: 1.55;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #2d2a24;
+    }
+
+    /* ── Map Tile: Sepia filter ── */
+    .leaflet-tile {
+      filter: sepia(20%) brightness(0.97) contrast(1.02);
+    }
+
+    /* ── Scrollbar for popup ── */
+    .popup-stars { color: var(--gold); font-size: 0.8rem; }
+
+    /* ── No results ── */
+    .no-results {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-style: italic;
+      font-size: 0.85rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-title">
+    <h1>MY STAY MAP</h1>
+    <span>宿泊記録</span>
+  </div>
+  <div class="header-stats">
+    <div class="stat">
+      <div class="stat-num" id="stat-hotels">—</div>
+      <div class="stat-label">Hotels</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="stat-nights">—</div>
+      <div class="stat-label">Nights</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="stat-countries">—</div>
+      <div class="stat-label">Countries</div>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <input class="search-box" type="text" id="search" placeholder="ホテル名・場所で検索…" />
+      <div class="filter-row">
+        <button class="filter-btn active" data-filter="all">ALL</button>
+        <button class="filter-btn" data-filter="luxury">Luxury</button>
+        <button class="filter-btn" data-filter="ryokan">旅館</button>
+        <button class="filter-btn" data-filter="resort">Resort</button>
+        <button class="filter-btn" data-filter="minshuku">民宿</button>
+        <button class="filter-btn" data-filter="landmark">Landmark</button>
+        <button class="filter-btn" data-filter="business">Business</button>
+      </div>
+    </div>
+    <div class="hotel-list" id="hotel-list">
+      <!-- populated by JS -->
+    </div>
+    <div class="no-results" id="no-results">該当するホテルが見つかりません</div>
+  </aside>
+
+  <div id="map"></div>
+</div>
+
+<script>
+// ────────────────────────────────────────────
+// Config
+// ────────────────────────────────────────────
+const CATEGORY_META = {
+  luxury:   { label: 'Luxury',   color: '#b8965a', icon: '✦' },
+  ryokan:   { label: '旅館',      color: '#6b8f71', icon: '⛩' },
+  resort:   { label: 'Resort',   color: '#5a7fa8', icon: '🌊' },
+  minshuku: { label: '民宿',      color: '#9b6b9b', icon: '◆' },
+  landmark: { label: 'Landmark', color: '#c0715a', icon: '★' },
+  business: { label: 'Business', color: '#5a5f6b', icon: '🏢' },
+};
+
+// ────────────────────────────────────────────
+// Map init
+// ────────────────────────────────────────────
+const map = L.map('map', {
+  center: [35.5, 136.0],
+  zoom: 5,
+  zoomControl: false,
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 18,
+}).addTo(map);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+// ────────────────────────────────────────────
+// State
+// ────────────────────────────────────────────
+let hotels = [];
+let markers = {};      // id → leaflet marker
+let activeId = null;
+let currentFilter = 'all';
+let searchQuery = '';
+
+// ────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────
+function starsHtml(n) {
+  return '★'.repeat(n) + '☆'.repeat(5 - n);
+}
+
+function formatDate(str) {
+  const d = new Date(str);
+  return `${d.getFullYear()}年${d.getMonth()+1}月`;
+}
+
+function makeIcon(cat, active = false) {
+  const meta = CATEGORY_META[cat] || CATEGORY_META.luxury;
+  const size = active ? 38 : 30;
+  const html = `
+    <div style="
+      width:${size}px;height:${size}px;
+      border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg);
+      background:${meta.color};
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 10px rgba(0,0,0,0.3);
+      border:2px solid ${active ? '#fff' : 'rgba(255,255,255,0.7)'};
+      transition:all 0.2s;
+    ">
+      <span style="transform:rotate(45deg);font-size:${active?15:11}px;line-height:1;">${meta.icon}</span>
+    </div>`;
+  return L.divIcon({
+    html,
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size/2, size],
+    popupAnchor: [0, -size],
+  });
+}
+
+function makePopupHtml(h) {
+  const meta = CATEGORY_META[h.category] || {};
+  return `
+    <div class="popup-inner">
+      <div class="popup-cat">${meta.label || h.category}</div>
+      <div class="popup-name">${h.name}</div>
+      <div class="popup-location">📍 ${h.location}</div>
+      <div class="popup-stars">${starsHtml(h.rating)}</div>
+      <div class="popup-divider"></div>
+      <div class="popup-row">
+        <span>宿泊日</span>
+        <strong>${formatDate(h.stayDate)}</strong>
+      </div>
+      <div class="popup-row">
+        <span>泊数</span>
+        <strong>${h.nights}泊</strong>
+      </div>
+      ${h.memo ? `<div class="popup-memo">"${h.memo}"</div>` : ''}
+    </div>`;
+}
+
+// ────────────────────────────────────────────
+// Render sidebar list
+// ────────────────────────────────────────────
+function renderList() {
+  const list = document.getElementById('hotel-list');
+  const noRes = document.getElementById('no-results');
+  list.innerHTML = '';
+
+  let visible = 0;
+
+  hotels.forEach(h => {
+    const meta = CATEGORY_META[h.category] || {};
+    const matchFilter = currentFilter === 'all' || h.category === currentFilter;
+    const matchSearch = !searchQuery ||
+      h.name.toLowerCase().includes(searchQuery) ||
+      (h.nameEn||'').toLowerCase().includes(searchQuery) ||
+      h.location.toLowerCase().includes(searchQuery);
+
+    const item = document.createElement('div');
+    item.className = 'hotel-item' + (h.id === activeId ? ' active' : '') + (!matchFilter || !matchSearch ? ' hidden' : '');
+    item.dataset.id = h.id;
+
+    if (matchFilter && matchSearch) visible++;
+
+    item.innerHTML = `
+      <div class="item-header">
+        <div class="item-name">${h.name}</div>
+        <div class="cat-dot" style="background:${meta.color || '#888'}"></div>
+      </div>
+      <div class="item-location">${h.location}</div>
+      <div class="item-meta">
+        <span class="item-date">${formatDate(h.stayDate)} · ${h.nights}泊</span>
+        <span class="stars">${starsHtml(h.rating)}</span>
+      </div>`;
+
+    item.addEventListener('click', () => focusHotel(h.id));
+    list.appendChild(item);
+  });
+
+  noRes.style.display = visible === 0 ? 'block' : 'none';
+}
+
+// ────────────────────────────────────────────
+// Focus a hotel
+// ────────────────────────────────────────────
+function focusHotel(id) {
+  if (activeId && markers[activeId]) {
+    const prev = hotels.find(h => h.id === activeId);
+    if (prev) markers[activeId].setIcon(makeIcon(prev.category, false));
+  }
+
+  activeId = id;
+  const h = hotels.find(h => h.id === id);
+  if (!h) return;
+
+  markers[id].setIcon(makeIcon(h.category, true));
+  markers[id].openPopup();
+  map.flyTo([h.lat, h.lng], Math.max(map.getZoom(), 12), { duration: 0.8 });
+
+  renderList();
+
+  // Scroll sidebar item into view
+  const el = document.querySelector(`.hotel-item[data-id="${id}"]`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ────────────────────────────────────────────
+// Populate markers and list
+// ────────────────────────────────────────────
+function buildMap(data) {
+  hotels = data;
+
+  // Stats
+  const totalNights = data.reduce((s, h) => s + h.nights, 0);
+  const countries = new Set(data.map(h => {
+    // rough: if location has Japanese chars → Japan, else the country part
+    return /[\u3000-\u9fff]/.test(h.location) ? 'Japan' : h.location.split(',').pop().trim();
+  }));
+
+  document.getElementById('stat-hotels').textContent = data.length;
+  document.getElementById('stat-nights').textContent = totalNights;
+  document.getElementById('stat-countries').textContent = countries.size;
+
+  // Sort by date desc
+  data.sort((a, b) => new Date(b.stayDate) - new Date(a.stayDate));
+
+  data.forEach(h => {
+    const marker = L.marker([h.lat, h.lng], { icon: makeIcon(h.category, false) })
+      .addTo(map)
+      .bindPopup(makePopupHtml(h), { maxWidth: 300, className: '' });
+
+    marker.on('click', () => {
+      if (activeId && markers[activeId] && activeId !== h.id) {
+        const prev = hotels.find(x => x.id === activeId);
+        if (prev) markers[activeId].setIcon(makeIcon(prev.category, false));
+      }
+      activeId = h.id;
+      markers[h.id].setIcon(makeIcon(h.category, true));
+      renderList();
+    });
+
+    marker.on('popupclose', () => {
+      if (activeId === h.id) {
+        activeId = null;
+        markers[h.id].setIcon(makeIcon(h.category, false));
+        renderList();
+      }
+    });
+
+    markers[h.id] = marker;
+  });
+
+  renderList();
+}
+
+// ────────────────────────────────────────────
+// Filters & Search
+// ────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    renderList();
+
+    // Update marker visibility
+    hotels.forEach(h => {
+      const show = currentFilter === 'all' || h.category === currentFilter;
+      if (show) {
+        if (!map.hasLayer(markers[h.id])) markers[h.id].addTo(map);
+      } else {
+        if (map.hasLayer(markers[h.id])) map.removeLayer(markers[h.id]);
+      }
+    });
+  });
+});
+
+document.getElementById('search').addEventListener('input', e => {
+  searchQuery = e.target.value.toLowerCase().trim();
+  renderList();
+});
+
+// ────────────────────────────────────────────
+// Load data
+// ────────────────────────────────────────────
+// ★ hotels.json をこのHTMLと同じフォルダに置いてください
+fetch('hotels.json')
+  .then(r => {
+    if (!r.ok) throw new Error('hotels.json が見つかりません');
+    return r.json();
+  })
+  .then(data => buildMap(data))
+  .catch(err => {
+    console.error(err);
+    // Fallback: ファイルが見つからない場合はサンプルデータを使用
+    const sample = [
+      { id:1, name:"The Peninsula Tokyo", nameEn:"The Peninsula Tokyo", location:"東京都千代田区", lat:35.6742, lng:139.7596, stayDate:"2023-11-15", nights:2, rating:5, category:"luxury", memo:"丸の内の絶景。アフタヌーンティーが最高だった。" },
+      { id:2, name:"星のや京都", nameEn:"Hoshinoya Kyoto", location:"京都府京都市嵐山", lat:35.0167, lng:135.6714, stayDate:"2023-05-20", nights:1, rating:5, category:"ryokan", memo:"舟でしかアクセスできない秘境感。嵐山の自然に囲まれた極上体験。" },
+      { id:3, name:"ザ・リッツ・カールトン大阪", nameEn:"The Ritz-Carlton Osaka", location:"大阪府大阪市北区", lat:34.7024, lng:135.4959, stayDate:"2022-12-31", nights:2, rating:5, category:"luxury", memo:"年越しカウントダウン。梅田の夜景が圧巻だった。" },
+      { id:4, name:"ハレクラニ沖縄", nameEn:"Halekulani Okinawa", location:"沖縄県国頭郡恩納村", lat:26.4659, lng:127.8545, stayDate:"2023-07-22", nights:3, rating:5, category:"resort", memo:"エメラルドグリーンの海。プールからの夕日が一生の思い出。" },
+      { id:5, name:"Marina Bay Sands", nameEn:"Marina Bay Sands", location:"Singapore", lat:1.2834, lng:103.8607, stayDate:"2018-03-18", nights:2, rating:4, category:"landmark", memo:"インフィニティプールからの夜景は息をのむ絶景。" },
+    ];
+    buildMap(sample);
+    const warn = document.createElement('div');
+    warn.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#333;color:#d4af7a;padding:10px 16px;font-size:0.75rem;font-family:monospace;z-index:9999;border:1px solid #b8965a;';
+    warn.textContent = '⚠ hotels.json が見つからないため、サンプルデータを表示中';
+    document.body.appendChild(warn);
+    setTimeout(() => warn.remove(), 5000);
+  });
+</script>
+</body>
+</html>
